@@ -6,33 +6,37 @@ This repository contains interactive Jupyter notebooks exploring fundamental con
 
 ```
 notebooks/
-├── intro/
-│   ├── calculus/
-│   │   ├── 01_calculus_overview.ipynb
-│   │   ├── 02_integration.ipynb
-│   │   └── 03_differentiation.ipynb
-│   ├── combinatorics/
-│   │   ├── 01_counting.ipynb
-│   │   ├── 02_permutations.ipynb
-│   │   ├── 03_selections.ipynb
-│   │   ├── 04_pigenhole_principle.ipynb
-│   │   └── 05_overview.ipynb
-│   ├── probability/
-│   │   ├── decision_theory/
-│   │   │   ├── 01_weighted_average.ipynb
-│   │   │   └── 02_expected_value.ipynb
-│   │   ├── distributions/
-│   │   │   ├── geometric_distribution.ipynb
-│   │   │   ├── poisson_distribution.ipynb
-│   │   │   └── uniform_distribution.ipynb
-│   │   ├── measures/
-│   │   │   └── 01_intro_to_measures.ipynb
-│   │   └── rules/
-│   │       ├── 01_basics.ipynb
-│   │       ├── 02_bayes.ipynb
-│   │       └── 03_random_variables.ipynb
-│   ├── set-theory/
-│   └── statistics/
+├── finance/
+│   ├── outputs/                        # saved plot images
+│   ├── 01_black_scholes.ipynb          # Q6: Black-Scholes & Monte Carlo (Euler-Maruyama)
+│   └── 02_risk_asset_model.ipynb       # Q7: CRR binomial model vs Black-Scholes
+└── intro/
+    ├── calculus/
+    │   ├── 01_calculus_overview.ipynb
+    │   ├── 02_integration.ipynb
+    │   └── 03_differentiation.ipynb
+    ├── combinatorics/
+    │   ├── 01_counting.ipynb
+    │   ├── 02_permutations.ipynb
+    │   ├── 03_selections.ipynb
+    │   ├── 04_pigenhole_principle.ipynb
+    │   └── 05_overview.ipynb
+    ├── probability/
+    │   ├── decision_theory/
+    │   │   ├── 01_weighted_average.ipynb
+    │   │   └── 02_expected_value.ipynb
+    │   ├── distributions/
+    │   │   ├── geometric_distribution.ipynb
+    │   │   ├── poisson_distribution.ipynb
+    │   │   └── uniform_distribution.ipynb
+    │   ├── measures/
+    │   │   └── 01_intro_to_measures.ipynb
+    │   └── rules/
+    │       ├── 01_basics.ipynb
+    │       ├── 02_bayes.ipynb
+    │       └── 03_random_variables.ipynb
+    ├── set-theory/
+    └── statistics/
 ```
 
 ## Topics Covered
@@ -58,6 +62,11 @@ notebooks/
   - Weighted averages
   - Expected value calculations
 
+### Financial Mathematics
+
+- **Black–Scholes model**: closed-form European call pricing, Monte Carlo via Euler–Maruyama, SLLN convergence
+- **CRR binomial model**: backward induction, convergence to Black–Scholes, odd/even oscillation
+
 ### Statistical Methods (Planned)
 - Descriptive statistics
 - Inferential statistics
@@ -74,32 +83,25 @@ notebooks/
 
 ## Setup
 
-1. Create Conda environment:
+A `Makefile` handles environment creation and launching JupyterLab.
+
+**Create the conda environment** (first time only):
+
 ```bash
-conda create --name stats_notebooks python=3.x
-conda activate stats_notebooks
+make env
 ```
 
-2. Install required packages:
+This runs `conda env create -f environment.yml`, installing all pinned dependencies including numpy, scipy, matplotlib, and JupyterLab.
+
+**Launch JupyterLab:**
+
 ```bash
-conda install jupyter numpy scipy matplotlib ipywidgets
+make lab
 ```
 
-3. Register the kernel:
-```bash
-python -m ipykernel install --user --name=stats_notebooks
-```
+This starts JupyterLab inside the `notebook-env` conda environment without needing to activate it manually. Navigate to the desired notebook in the `notebooks/` directory.
 
-## Usage
-
-Start JupyterLab:
-```bash
-jupyter lab
-```
-
-**note** You may need to run ```jupyter lab --allow-root```
-
-Navigate to the desired notebook in the `notebooks/` directory. It's recommended to start with foundational topics in calculus and set theory before progressing to probability concepts.
+> Plot images saved during notebook execution are written to `notebooks/finance/outputs/`.
 
 ## Prerequisites
 - Basic calculus understanding
