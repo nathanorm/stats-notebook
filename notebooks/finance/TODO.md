@@ -1,0 +1,2 @@
+- [ ] Model Arbitrage scenarios 
+- [ ] Model energy generation / trading algorithm using ideas from arbitrage in finance
