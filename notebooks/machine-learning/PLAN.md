@@ -1,121 +1,143 @@
-# CS830 CW1 Plan — Regression: Predict Song Popularity
+# CS830 CW1 — Regression: Predict Song Popularity
 
-**Problem choice:** Regression — predict `pop` (popularity score)
+## Problem Statement
 
-**Why:** Continuous target gives richer model comparison surface. Genre prediction collapses to a few dominant classes with severe imbalance — harder to interpret meaningfully.
+**Commissioned task:** Given the audio characteristics of a song, predict its popularity score on Spotify.
 
----
+**Problem type:** Regression — predict `pop` (continuous, range 26–94 in this dataset).
 
-## Data columns (from raw CSVs)
+**Why regression over classification:**
+The classification alternative (predict `top_genre`) has a severe class imbalance problem: `dance pop` accounts for 114/660 songs (17%), with a long tail of tiny classes. After collapsing genres with fewer than 3 examples, 41 classes remain across only 660 rows (~16 examples per class on average). A naive classifier predicting the majority class every time achieves ~17% accuracy — the writeup would be dominated by imbalance-handling rather than ML insights. Regression on a continuous, well-distributed target is the cleaner path for this dataset.
 
-`title, artist, top genre, year, bpm, nrgy, dnce, dB, live, val, dur, acous, spch, pop`
-
-Files: `1950.csv … 2010.csv` (one per decade, combined = full dataset)
-
----
-
-## Step-by-step sequence
-
-### 1. Exploratory Data Analysis (findings drive everything downstream)
-
-#### Load & first look
-
-- [ ] Load all 7 decade CSVs, tag each row with source decade, concat
-- [ ] `df.info()`, `df.describe()`, shape — get a feel for scale
-- [ ] Check for duplicate rows (same title + artist); decide drop vs keep
-
-#### Data quality — find the problems before deciding how to fix them
-
-- [ ] Null audit: count and % per column — is missingness random or structured?
-- [ ] `year` coherence: plot distribution of `year` values per source decade file; quantify how many re-releases are outside ±5yr of their decade — decide threshold for dropping vs flagging
-- [ ] `pop` = 0 or outlier check: are zero-popularity rows real or data errors?
-- [ ] Numeric range sanity: `bpm` > 300? `dur` < 10s? `dB` > 0? Flag anomalies
-- [ ] Genre cardinality: how many unique genres? Long tail? Collapse rare genres into "other" if warranted
-
-#### Distributions — let the data tell us what it needs
-
-- [ ] Histogram for every numeric feature + `pop` (target)
-- [ ] Identify right/left skew — log-transform candidates: `dur`, `acous`, `spch`, `bpm`
-- [ ] Box plots by decade — does `pop` shift over time? Do audio features drift?
-- [ ] Genre frequency bar chart — is this balanced enough for target encoding or does it collapse?
-
-#### Relationships — what might predict popularity?
-
-- [ ] Correlation heatmap across all numeric features
-- [ ] Scatter plots: `pop` vs each feature (spot non-linear relationships early)
-- [ ] Mean `pop` by genre (ranked) — is genre a strong signal?
-- [ ] Mean `pop` by decade — strong temporal trend? This affects whether `year` is a useful feature or a confound
-
-#### Cleaning decisions (document each one explicitly)
-
-- [ ] Nulls: drop row / impute median / impute mode — based on what the audit shows
-- [ ] Year outliers: drop or keep with a `rerelease` flag column
-- [ ] Pop = 0: drop or keep — justify
-- [ ] Numeric anomalies: cap at sensible bounds or drop
-
-#### Lock the holdout split last, after cleaning
-
-- [ ] `train_test_split(stratify=decade, test_size=0.1, random_state=42)` on cleaned data
-- [ ] Save holdout indices to `data/spotify-songs/validation/holdout_indices.json` — reproducibility without writing a full CSV
-
-### 2. Feature Engineering (informed by Step 1 findings)
-
-- [ ] Encode `top genre` — target encoding if genre has strong pop signal (Step 1 will tell us); ordinal otherwise
-- [ ] Drop `title`, `artist` — too high cardinality, not generalisable
-- [ ] `year` vs `decade`: use whichever Step 1 shows has a cleaner relationship to `pop`
-- [ ] Apply log transforms to skewed features identified in Step 1
-- [ ] StandardScaler in sklearn Pipeline for linear models only (tree models get raw numerics)
-
-### 3. Baseline Models (benchmarks)
-
-- [ ] **Mean predictor** — predict global mean `pop` for every row (floor benchmark)
-- [ ] **Linear Regression** — OLS, interpret coefficients, check residuals
-- [ ] Report RMSE and R² for both on 5-fold CV
-
-### 4. Intermediate Models
-
-- [ ] **Ridge Regression** — tune `alpha` via CV, compare to OLS; shows regularisation effect
-- [ ] **Decision Tree Regressor** — tune `max_depth`; visualise one shallow tree to build intuition
-
-### 5. Advanced Models
-
-- [ ] **Random Forest Regressor** — tune `n_estimators`, `max_features`; extract feature importances
-- [ ] **Gradient Boosting (XGBoost or sklearn GBR)** — tune `learning_rate`, `max_depth`, `n_estimators` via RandomizedSearchCV
-
-### 6. Model Comparison
-
-- [ ] Table: model | CV RMSE | CV R² | fit time
-- [ ] Select best model based on CV RMSE
-- [ ] Evaluate best model on held-out validation set (one shot, no peeking before this)
-- [ ] Residual plot: predicted vs actual, residuals vs predicted
-
-### 7. Interpretation & Insights
-
-- [ ] Feature importance plot for winning model
-- [ ] Partial dependence plots for top 3 features
-- [ ] Narrative: what makes a song popular per the model? Does genre/bpm/energy dominate?
-- [ ] Honest critique: where does the model fail? (low-pop niche songs, era bias, etc.)
-
-### 8. Notebook Writeup (submission-ready)
-
-- [ ] Markdown cells: problem framing → data understanding → prep → modelling → results → conclusion
-- [ ] All code cells produce output (Restart & Run All clean pass)
-- [ ] GenAI acknowledgement section at end
-- [ ] PDF export ≤ 20 pages
+**The question being answered:** Which audio characteristics (energy, danceability, acousticness, loudness, etc.) predict how popular a song will be on Spotify? The client is a music label or producer who wants to understand what makes a song perform well — not what year it was released.
 
 ---
 
-## Models in scope (3–5 required)
+## Dataset
 
-| # | Model | Role |
+- **Source:** 7 decade CSVs (`1950.csv` – `2010.csv`), combined into one dataset
+- **Raw shape:** 667 rows × 15 columns
+- **Clean shape:** 660 rows × 16 columns (after cleaning, see below)
+- **Split:** 594 train / 66 holdout (90/10, stratified by `source_decade`, `random_state=42`)
+- **Holdout indices:** persisted to `data/spotify-songs/validation/holdout_indices.json`
+
+---
+
+## EDA Findings
+
+### Data quality
+
+| Issue | Count | Action taken | Justification |
+| --- | --- | --- | --- |
+| Duplicate rows (title + artist) | 7 | Dropped | Same song in both train and holdout would leak information |
+| `top_genre` nulls | 16 (2.4%) | Filled → `"unknown"` | Must fill before genre collapsing or NaNs bypass the rare-genre filter |
+| `pop == 0` | 0 | No action | Not present in this dataset |
+| Year incoherence (re-releases) | 143 rows with \|year − source_decade\| > 15 | Flagged as `is_rerelease`; excluded from features | 21% of data — too many to drop; flag added but excluded from modelling (see feature decisions) |
+| Rare genres (n < 3) | 76 genres | Collapsed → `"other"` | Too sparse for meaningful target encoding |
+
+### Feature correlations with `pop`
+
+| Feature | r | Notes |
 | --- | --- | --- |
-| 1 | Mean predictor | Naive baseline |
-| 2 | Linear Regression | Linear baseline |
-| 3 | Ridge Regression | Regularised linear |
-| 4 | Random Forest | Non-linear ensemble |
-| 5 | Gradient Boosting | Best-effort model |
+| `acous` | −0.455 | Strongest signal — acoustic songs are less popular |
+| `db` | +0.365 | Louder songs score higher |
+| `dur` | +0.281 | Longer songs tend to score higher |
+| `nrgy` | +0.272 | More energetic = more popular |
+| `dnce` | +0.249 | More danceable = more popular |
+| `spch` | +0.193 | More speech = slightly more popular (rap/hip-hop effect) |
+| `bpm` | +0.067 | Weak — likely noise |
+| `val` | −0.102 | Weak negative |
+| `live` | −0.037 | Effectively zero — dropped |
 
-Decision Tree sits between 3 and 4 — include briefly as motivation for ensembles.
+### Skewness
+
+| Feature | Skew | Action |
+| --- | --- | --- |
+| `spch` | 3.58 | Log-transform |
+| `live` | 2.16 | Dropped (zero correlation anyway) |
+| `dur` | 0.97 | Borderline — log-transform applied |
+| Others | < 0.85 | No transform needed |
+
+### Genre signal
+
+- 115 unique genres in raw data → 41 after collapsing rare genres
+- Top genres by mean `pop` are modern rap/hip-hop styles — genre is a real signal
+- Target encoding (with smoothing, fitted inside CV folds only) chosen over ordinal encoding
+
+---
+
+## Feature Engineering Decisions
+
+| Feature | Decision | Justification |
+| --- | --- | --- |
+| `acous`, `db`, `nrgy`, `dnce`, `dur`, `spch`, `val` | Keep as model inputs | All have measurable correlation with `pop`; all describe the sound of the song |
+| `bpm` | **Drop** | r = +0.067 with `pop` — weakest remaining feature and effectively noise. Pre-modelling check showed `bpm` is largely independent of other features (max inter-feature r = 0.18), so the reason to drop is purely its near-zero predictive signal, not multicollinearity. With only 660 rows, including noise features degrades linear models. |
+| `live` | **Drop** | r = −0.037, effectively zero — adds noise not signal |
+| `top_genre` | **Target encode** (smoothed, inside CV) | 41 categories with genuine mean-pop variation; raw label encoding loses ordinal signal; one-hot adds 41 sparse columns to 660 rows; genre is a valid input — a producer knows what genre they are making |
+| `spch`, `dur` | **Log-transform** | Skew 3.58 and 0.97 respectively; improves linear model assumptions |
+| `year`, `source_decade` | **Drop** | Spotify's `pop` score is based on current streaming activity, so older songs score lower by construction — not because of their audio features. Including `year` would let the model predict era rather than sound. The commissioned question is about audio characteristics, not release date. |
+| `is_rerelease` | **Drop** | Derivative of `year`; same reasoning as above |
+| `title`, `artist` | **Drop** | Too high cardinality; not generalisable to new songs |
+
+### Multicollinearity note
+
+Pre-modelling verification confirmed strong inter-feature correlations:
+
+| Pair | r |
+| --- | --- |
+| `nrgy` ↔ `db` | +0.70 |
+| `nrgy` ↔ `acous` | −0.66 |
+| `db` ↔ `acous` | −0.50 |
+| `dnce` ↔ `val` | +0.46 |
+
+These do not affect tree models but will destabilise and inflate OLS coefficients — `nrgy` and `db` are largely measuring the same underlying quality (loud, electric songs). Ridge Regression is included specifically to handle this via L2 regularisation — its inclusion is quantitatively justified, not just a formality.
+
+### `acous == 0` rows
+
+41 songs have `acous = 0`. Inspection confirmed these are real values — all are high-energy electric or rock/pop songs (e.g. Born in the U.S.A., Numb, Pour Some Sugar On Me). Spotify measured them as 0% acoustic correctly. No special handling needed.
+
+---
+
+## Model Plan
+
+### Models in scope
+
+| # | Model | Type | Role |
+| --- | --- | --- | --- |
+| 1 | Mean predictor | Naive baseline | Floor benchmark — any real model must beat this |
+| 2 | Linear Regression | Linear | Establishes whether a linear relationship exists; interpretable coefficients |
+| 3 | Ridge Regression | Regularised linear | Tests whether shrinkage helps given correlated features (`nrgy`/`db` are correlated) |
+| 4 | Random Forest | Non-linear ensemble | Captures feature interactions; provides feature importance ranking |
+| 5 | Gradient Boosting | Boosted ensemble | Best-effort model; compare to RF to assess whether sequential boosting helps on this dataset size |
+
+A shallow Decision Tree will be shown briefly between Ridge and Random Forest as intuition-building for why ensembles improve over a single tree — not counted as one of the 5.
+
+### Evaluation
+
+- **During training:** 5-fold cross-validation on `df_train` (594 rows); report mean CV RMSE and R²
+- **Final evaluation:** best model evaluated once on `df_holdout` (66 rows) — not touched until this point
+- **Metrics:** RMSE (primary), R² (secondary), fit time (context)
+- **Plots:** residuals vs predicted, feature importance, partial dependence for top 3 features
+
+### Expected R² range
+
+R² of 0.3–0.5 is realistic given the noisy target. Low R² is expected and will be explained in the writeup — `pop` reflects streaming behaviour, social signals, and playlist placement that audio features alone cannot capture.
+
+---
+
+## Notebook Structure (submission)
+
+1. Problem description and motivation
+2. Data loading and first look
+3. Data quality and cleaning (with documented decisions)
+4. Distributions and relationships (EDA plots)
+5. Feature engineering and pipeline setup
+6. Models: baseline → linear → regularised → ensemble → boosted
+7. Model comparison table
+8. Final evaluation on holdout
+9. Interpretation: feature importance, partial dependence, critique
+10. Conclusion: answer the commissioned question
+11. GenAI acknowledgement
 
 ---
 
@@ -123,15 +145,8 @@ Decision Tree sits between 3 and 4 — include briefly as motivation for ensembl
 
 ```text
 data/spotify-songs/
-  raw/          ← original decade CSVs (read-only)
-  training/     ← clean.csv, features.csv
-  validation/   ← holdout.csv (10%, touched only at final eval)
+  raw/          ← original decade CSVs (read-only, permissions set to 444)
+  validation/   ← holdout_indices.json (10% split, locked after EDA)
 ```
 
----
-
-## Key risks
-
-- **Year incoherence** — re-releases skew decade representation; filter or flag
-- **Genre leakage** — target encoding must be fit on train fold only inside CV
-- **Low R²** — popularity is noisy; explain this in writeup rather than over-engineer
+All cleaning and feature engineering happens in-memory inside sklearn Pipelines. No intermediate CSVs written — transformers are fitted per CV fold to prevent leakage.
