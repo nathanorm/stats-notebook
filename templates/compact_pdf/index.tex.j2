@@ -1,0 +1,27 @@
+((=- Compact PDF template: smaller body font, tighter margins, smaller code font -=))
+((*- if not cell_style is defined -*))
+    ((* set cell_style = 'style_jupyter.tex.j2' *))
+((*- endif -*))
+((* extends cell_style *))
+
+
+((*- block docclass -*))
+\documentclass[10pt]{article}
+((*- endblock docclass -*))
+
+
+((*- block margins -*))
+    \geometry{verbose,tmargin=0.75in,bmargin=0.75in,lmargin=0.75in,rmargin=0.75in}
+((*- endblock margins -*))
+
+
+((*- block definitions -*))
+    ((( super() )))
+    % Fix for pandoc 3.x: \def\LTcaptype{none} triggers "No counter 'none' defined"
+    % in the caption package when rendering longtable markdown tables.
+    \newcounter{none}
+    % Smaller code/output font to reduce page count.
+    % \small  = 9pt in a 10pt doc (readable, moderate savings)
+    % \footnotesize = 8pt (more aggressive — change here if needed)
+    \fvset{fontsize=\small}
+((*- endblock definitions -*))
